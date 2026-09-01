@@ -39,6 +39,8 @@ extension CGVector {
 
     func scaled(to len: CGFloat) -> CGVector { normalized * len }
 
+    func dot(_ o: CGVector) -> CGFloat { dx * o.dx + dy * o.dy }
+
     func rotated(by a: CGFloat) -> CGVector {
         let c = cos(a), s = sin(a)
         return CGVector(dx: dx * c - dy * s, dy: dx * s + dy * c)

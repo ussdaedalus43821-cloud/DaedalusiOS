@@ -19,6 +19,7 @@ final class Starfield: SKNode {
 
     private var layers: [Layer] = []
     private var viewSize: CGSize = .zero
+    private var facing = CGVector(dx: 0, dy: 1)
 
     func build(viewSize: CGSize) {
         removeAllChildren()
@@ -38,6 +39,7 @@ final class Starfield: SKNode {
                 let dot = SKShapeNode(circleOfRadius: spec.size)
                 dot.fillColor = SKColor(white: spec.bright, alpha: 1)
                 dot.strokeColor = .clear
+                dot.blendMode = .add
                 addChild(dot)
                 nodes.append(dot)
                 anchors.append(CGPoint(x: .random(in: 0...viewSize.width),
@@ -47,9 +49,12 @@ final class Starfield: SKNode {
         }
     }
 
-    func update(cameraPos: CGPoint) {
+    /// `streak` 0..1 stretches stars into hyperdrive lines along `-facing`.
+    func update(cameraPos: CGPoint, streak: CGFloat = 0, facing: CGVector = CGVector(dx: 0, dy: 1)) {
         let w = viewSize.width, h = viewSize.height
         guard w > 0, h > 0 else { return }
+        self.facing = facing
+        let dir = (-facing).normalized
         for layer in layers {
             for (i, node) in layer.nodes.enumerated() {
                 let a = layer.anchors[i]
@@ -58,6 +63,14 @@ final class Starfield: SKNode {
                 if x < 0 { x += w }
                 if y < 0 { y += h }
                 node.position = CGPoint(x: x - w / 2, y: y - h / 2)
+                if streak > 0.05 {
+                    let len = 1 + streak * 60 * layer.parallax
+                    node.xScale = 1
+                    node.yScale = len
+                    node.zRotation = dir.angle - .pi / 2
+                } else if node.yScale != 1 {
+                    node.yScale = 1; node.xScale = 1; node.zRotation = 0
+                }
             }
         }
     }
