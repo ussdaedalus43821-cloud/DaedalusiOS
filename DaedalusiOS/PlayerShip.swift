@@ -198,16 +198,21 @@ final class PlayerShip: Entity {
         guard gunCd <= 0 || Settings.shared.noCooldown else { return }
         gunCd = spec.gunCd
 
-        // Atlantis: an omni-directional broadside out of every rim port
+        // Atlantis: an omni-directional broadside -- twin bolts from every rim
+        // port, so a full trigger pull is 16 rounds fanning out in all 8 axes
         if spec.gunPorts > 0 {
             for i in 0..<spec.gunPorts {
                 let a = zRotation + CGFloat(i) / CGFloat(spec.gunPorts) * .pi * 2
-                let dir = CGVector(angle: a).rotated(by: .random(in: -spec.gunSpread...spec.gunSpread))
-                let shot = Projectile(kind: .gun, friendly: true,
-                                      position: position + CGVector(angle: a) * radius,
-                                      velocity: dir * spec.gunSpeed + velocity * 0.4,
-                                      damage: spec.gunDmg, life: GC.gunLife)
-                scene.add(projectile: shot)
+                let outward = CGVector(angle: a)
+                let perp = CGVector(dx: -outward.dy, dy: outward.dx)
+                for side in [CGFloat(5), CGFloat(-5)] {
+                    let dir = outward.rotated(by: .random(in: -spec.gunSpread...spec.gunSpread))
+                    let shot = Projectile(kind: .gun, friendly: true,
+                                          position: position + outward * radius + perp * side,
+                                          velocity: dir * spec.gunSpeed + velocity * 0.4,
+                                          damage: spec.gunDmg, life: GC.gunLife)
+                    scene.add(projectile: shot)
+                }
             }
             return
         }
