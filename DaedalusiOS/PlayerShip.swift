@@ -197,6 +197,21 @@ final class PlayerShip: Entity {
     private func fireGun(_ scene: GameScene) {
         guard gunCd <= 0 || Settings.shared.noCooldown else { return }
         gunCd = spec.gunCd
+
+        // Atlantis: an omni-directional broadside out of every rim port
+        if spec.gunPorts > 0 {
+            for i in 0..<spec.gunPorts {
+                let a = zRotation + CGFloat(i) / CGFloat(spec.gunPorts) * .pi * 2
+                let dir = CGVector(angle: a).rotated(by: .random(in: -spec.gunSpread...spec.gunSpread))
+                let shot = Projectile(kind: .gun, friendly: true,
+                                      position: position + CGVector(angle: a) * radius,
+                                      velocity: dir * spec.gunSpeed + velocity * 0.4,
+                                      damage: spec.gunDmg, life: GC.gunLife)
+                scene.add(projectile: shot)
+            }
+            return
+        }
+
         let head = CGVector(angle: zRotation)
         for side in [CGFloat(7), CGFloat(-7)] {
             let perp = CGVector(angle: zRotation + .pi / 2) * side

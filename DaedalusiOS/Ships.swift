@@ -54,6 +54,11 @@ struct ShipSpec {
     var turretDmg: CGFloat = 15
     var turretRange: CGFloat = 640
 
+    /// >0 == an omni-directional broadside: this many gun ports evenly around
+    /// the rim, each firing outward on every trigger (Atlantis). 0 == the
+    /// default forward twin cannon.
+    var gunPorts: Int = 0
+
     var bodyColor: SKColor = SKColor(red: 0.62, green: 0.70, blue: 0.85, alpha: 1)
 }
 
@@ -127,10 +132,11 @@ enum Ships {
                 shieldMax: 7000, shieldRegen: 2800, shieldDelay: 0, hullMax: 5600,
                 hardened: true,
                 thrust: 290, turn: 1.9, maxSpeed: 480, damp: 0.998, repairRate: 11.0,
-                gunCd: 0.08, gunDmg: 28,
+                gunCd: 0.12, gunDmg: 24,
                 rocketCd: 0.75, rocketDmg: 300, rocketAmmo: 80,
                 homingCd: 1.0, homingDmg: 125, homingAmmo: 3200, homingTurn: 4.7,
                 homingSalvo: 6,
+                gunPorts: 8,
                 bodyColor: SKColor(red: 0.68, green: 0.76, blue: 0.86, alpha: 1))
         }
     }
@@ -171,15 +177,28 @@ enum Ships {
             }
         case .atlantis:
             dot(node, at: .zero, r: 4, color: SKColor(red: 0.6, green: 0.95, blue: 1, alpha: 1))
+            // eight gun ports around the rim -- the bolts come out of these
+            let ports = max(1, s.gunPorts)
+            for i in 0..<ports {
+                let a = CGFloat(i) / CGFloat(ports) * .pi * 2
+                let muzzle = dot(node, at: CGPoint(x: cos(a) * s.radius, y: sin(a) * s.radius),
+                                 r: 2.6, color: SKColor(red: 0.6, green: 0.95, blue: 1, alpha: 1))
+                muzzle.run(.repeatForever(.sequence([
+                    .fadeAlpha(to: 0.35, duration: 0.5), .fadeAlpha(to: 1, duration: 0.5)])))
+            }
+            // gold thruster marker so the facing vector is obvious on a round hull
+            dot(node, at: CGPoint(x: -s.radius - 6, y: 0), r: 3.5, color: GC.ancientGold)
         }
         return hull
     }
 
-    private static func dot(_ node: SKNode, at p: CGPoint, r: CGFloat, color: SKColor) {
+    @discardableResult
+    private static func dot(_ node: SKNode, at p: CGPoint, r: CGFloat, color: SKColor) -> SKShapeNode {
         let d = SKShapeNode(circleOfRadius: r)
         d.fillColor = color; d.strokeColor = .clear; d.blendMode = .add
         d.position = p
         node.addChild(d)
+        return d
     }
 
     private static func hullPath(_ id: ShipID) -> CGPath {

@@ -50,6 +50,7 @@ final class GameScene: SKScene {
 
     private var beamSeg: (CGPoint, CGPoint)?
     private var beamNode: SKShapeNode?
+    private var beamCoreNode: SKShapeNode?
     private var flashNode: SKSpriteNode?
 
     // MARK: Lifecycle
@@ -57,6 +58,7 @@ final class GameScene: SKScene {
     override func didMove(to view: SKView) {
         scaleMode = .resizeFill
         isUserInteractionEnabled = true
+        view.isMultipleTouchEnabled = true    // rotate + fire at the same time
 
         camera = cam
         addChild(cam)
@@ -70,12 +72,23 @@ final class GameScene: SKScene {
 
         let beam = SKShapeNode()
         beam.strokeColor = SKColor(red: 0.85, green: 0.97, blue: 1, alpha: 1)
-        beam.lineWidth = GC.beamWidth
-        beam.glowWidth = 16
+        beam.lineWidth = 14
+        beam.glowWidth = 26
+        beam.lineCap = .round
         beam.blendMode = .add
         beam.zPosition = 20
         beam.isHidden = true
         addChild(beam)
+
+        let beamCore = SKShapeNode()
+        beamCore.strokeColor = .white
+        beamCore.lineWidth = 5
+        beamCore.lineCap = .round
+        beamCore.blendMode = .add
+        beamCore.zPosition = 21
+        beamCore.isHidden = true
+        addChild(beamCore)
+        beamCoreNode = beamCore
         beamNode = beam
 
         let fl = SKSpriteNode(color: SKColor(red: 1, green: 0.96, blue: 0.88, alpha: 1),
@@ -204,23 +217,26 @@ final class GameScene: SKScene {
     func setBeam(_ seg: (CGPoint, CGPoint)?) { beamSeg = seg }
 
     func applyBeam(origin: CGPoint, dir: CGVector, dps: CGFloat) -> CGPoint {
-        var bestT = GC.beamRange
+        // A wide piercing swath -- it damages EVERY enemy whose centre is within
+        // `swath` of the ray, near and far alike (touch aim is coarse, so the
+        // damage zone matches the glow instead of a hairline).
+        let swath: CGFloat = 30
+        var farthest: CGFloat = 320                       // min visible length
         for e in enemies where !e.isDead {
             let rel = e.position - origin
             let t = rel.dot(dir)
-            if t < 0 || t > GC.beamRange { continue }
+            if t < -e.radius || t > GC.beamRange { continue }
             let perp = (rel - dir * t).length
-            if perp <= e.radius + GC.beamWidth {
-                if Settings.shared.oneShotKill { e.kill() }
-                else { e.takeDamage(dps, from: -dir) }
-                bestT = min(bestT, t + e.radius * 0.5)
-                if Bool.random() {
-                    spawnTrailPuff(at: origin + dir * t,
-                                   color: SKColor(red: 0.6, green: 0.95, blue: 1, alpha: 1))
-                }
+            guard perp <= e.radius + swath else { continue }
+            if Settings.shared.oneShotKill { e.kill() }
+            else { e.takeDamage(dps, from: -dir) }
+            farthest = max(farthest, min(GC.beamRange, t + e.radius))
+            if Bool.random() {
+                spawnTrailPuff(at: origin + dir * max(0, t),
+                               color: SKColor(red: 0.6, green: 0.95, blue: 1, alpha: 1))
             }
         }
-        return origin + dir * bestT
+        return origin + dir * farthest
     }
 
     // MARK: Main loop
@@ -275,12 +291,17 @@ final class GameScene: SKScene {
     }
 
     private func drawBeamVisual() {
-        guard let (o, e) = beamSeg, let n = beamNode else { beamNode?.isHidden = true; return }
+        guard let (o, e) = beamSeg, let n = beamNode else {
+            beamNode?.isHidden = true; beamCoreNode?.isHidden = true; return
+        }
         n.isHidden = false
+        beamCoreNode?.isHidden = false
+        let jit = CGVector(dx: .random(in: -2...2), dy: .random(in: -2...2))
         let p = CGMutablePath()
         p.move(to: o)
-        p.addLine(to: e + CGVector(dx: .random(in: -2...2), dy: .random(in: -2...2)))
+        p.addLine(to: e + jit)
         n.path = p
+        beamCoreNode?.path = p
     }
 
     // MARK: Collisions
