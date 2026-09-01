@@ -438,13 +438,25 @@ final class GameScene: SKScene {
 
     // MARK: Spawning
 
+    /// Concurrent-hostile budget: sector danger scaled by difficulty. On
+    /// BRUTAL an EXTREME sector fills right up to the hard cap.
+    private var hostileTarget: Int {
+        let base = CGFloat(3 + sector.danger * 2)          // 3 (safe) .. 9 (EXTREME)
+        return min(GC.maxEnemies, max(2, Int((base * Settings.shared.spawnMult).rounded())))
+    }
+    private var capitalCap: Int {
+        let d = Settings.shared.difficulty
+        let bonus = (d == .brutal ? 2 : d == .hard ? 1 : 0)
+        return min(GC.maxEnemies, GC.maxCapitals + (sector.danger >= 2 ? bonus : 0))
+    }
+
     private func updateSpawning(_ dt: CGFloat) {
         guard sector.spawns, enemies.count < GC.maxEnemies else { return }
         spawnTimer -= dt
         guard spawnTimer <= 0 else { return }
 
-        let target = 2 + sector.danger
-        if enemies.count >= target { spawnTimer = 2.5; return }
+        let target = hostileTarget
+        if enemies.count >= target { spawnTimer = 1.5; return }
 
         let lo = sector.fighterCd.lowerBound, hi = sector.fighterCd.upperBound
         spawnTimer = CGFloat.random(in: lo...hi) / Settings.shared.spawnMult
@@ -457,7 +469,7 @@ final class GameScene: SKScene {
     }
 
     private func spawnRing(_ kind: EnemyKind) {
-        if kind.isCapital, enemies.filter({ $0.kind.isCapital }).count >= GC.maxCapitals { return }
+        if kind.isCapital, enemies.filter({ $0.kind.isCapital }).count >= capitalCap { return }
         if kind == .replicator {
             if replicatorDestroyed || enemies.contains(where: { $0.kind == .replicator }) { return }
         }

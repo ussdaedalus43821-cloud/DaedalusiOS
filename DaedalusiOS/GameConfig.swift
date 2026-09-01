@@ -81,7 +81,7 @@ enum GC {
     static let infestCureCeiling: CGFloat  = 0.5
 
     // ---- world / spawning --------------------------------------
-    static let maxEnemies = 12
+    static let maxEnemies = 18       // BRUTAL / EXTREME headroom (see hostileTarget)
     static let maxCapitals = 2
     static let enemyLeash: CGFloat = 1900
 

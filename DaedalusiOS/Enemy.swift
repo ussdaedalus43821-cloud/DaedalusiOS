@@ -439,17 +439,26 @@ final class Enemy: Entity {
             if beamT <= 0 { beamState = .fire; beamT = spec.beamDur }
         case .fire:
             beamT -= dt
-            drawBeam(charging: false)
             let origin = position + beamDir * radius
+            var hitDist = spec.beamRange
             for tgt in scene.friendlies() where !tgt.isDead {
                 if let pl = tgt as? PlayerShip, pl.cloaked { continue }
                 let rel = tgt.position - origin
                 let t = rel.dot(beamDir)
-                if t > 0 && t < spec.beamRange &&
-                    (rel - beamDir * t).length < tgt.radius + 12 {
-                    tgt.takeDamage(spec.beamDmg * dt, from: (origin - tgt.position).normalized)
+                guard t > -tgt.radius, t < spec.beamRange,
+                      (rel - beamDir * t).length < tgt.bubbleRadius + 20 else { continue }
+                tgt.takeDamage(spec.beamDmg * dt, from: (origin - tgt.position).normalized)
+                // the Ori beam is an ancient-tier weapon: it holds even a
+                // hardened Lantean shield off-line for as long as it connects,
+                // so the shield actually drains instead of regenerating through
+                tgt.bumpRegenDelay(0.35)
+                hitDist = min(hitDist, max(40, t))
+                if Bool.random() {
+                    scene.spawnTrailPuff(at: origin + beamDir * max(0, t),
+                                         color: SKColor(red: 1, green: 0.85, blue: 0.4, alpha: 1))
                 }
             }
+            drawBeam(charging: false, length: hitDist)
             if beamT <= 0 {
                 beamState = .idle
                 beamCdTimer = .random(in: spec.beamCd)
@@ -458,15 +467,16 @@ final class Enemy: Entity {
         }
     }
 
-    private func drawBeam(charging: Bool) {
+    private func drawBeam(charging: Bool, length: CGFloat = 0) {
         guard let n = beamNode else { return }
         n.isHidden = false
+        let len = charging ? spec.beamRange : (length > 0 ? length : spec.beamRange)
         let p = CGMutablePath()
         p.move(to: CGPoint(x: radius, y: 0))
-        p.addLine(to: CGPoint(x: radius + spec.beamRange, y: 0))
+        p.addLine(to: CGPoint(x: radius + len, y: 0))
         n.path = p
         n.zRotation = beamDir.angle - zRotation
-        n.lineWidth = charging ? 2 : 6
+        n.lineWidth = charging ? 2 : 7
         n.alpha = charging ? 0.5 : 1
     }
 
