@@ -25,8 +25,8 @@ final class TouchControls: SKNode {
 
     enum Pad: CaseIterable {
         case left, right, thrust, gun, rocket, homing, beam   // held
-        case cloak, wing, jump                                // tapped
-        var isTap: Bool { self == .cloak || self == .wing || self == .jump }
+        case cloak, wing, jump, pause                         // tapped
+        var isTap: Bool { self == .cloak || self == .wing || self == .jump || self == .pause }
     }
 
     var onTap: ((Pad) -> Void)?
@@ -68,6 +68,7 @@ final class TouchControls: SKNode {
         case .left, .right: return 38
         case .rocket, .homing, .beam: return 28
         case .cloak, .wing, .jump: return 26
+        case .pause: return 22
         }
     }
 
@@ -83,6 +84,7 @@ final class TouchControls: SKNode {
         case .cloak:  return "CLK"
         case .wing:   return "WING"
         case .jump:   return "JUMP"
+        case .pause:  return "II"
         }
     }
 
@@ -105,9 +107,10 @@ final class TouchControls: SKNode {
         pads[.beam]?.position   = CGPoint(x: rx - 158, y: by + 254)
 
         // left-edge system tap strip, vertically centred
-        pads[.cloak]?.position  = CGPoint(x: bx + 44, y: 46)
-        pads[.wing]?.position   = CGPoint(x: bx + 44, y: -14)
-        pads[.jump]?.position   = CGPoint(x: bx + 44, y: -74)
+        pads[.cloak]?.position  = CGPoint(x: bx + 44, y: 84)
+        pads[.wing]?.position   = CGPoint(x: bx + 44, y: 26)
+        pads[.jump]?.position   = CGPoint(x: bx + 44, y: -32)
+        pads[.pause]?.position  = CGPoint(x: bx + 44, y: -86)
     }
 
     /// Hidden at game over so a "tap to continue" isn't eaten by a pad.

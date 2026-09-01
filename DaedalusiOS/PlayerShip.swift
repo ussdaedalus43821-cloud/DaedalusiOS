@@ -152,14 +152,16 @@ final class PlayerShip: Entity {
     func update(dt: CGFloat, input: InputState, scene: GameScene) {
         zRotation += input.turn * spec.turn * dt
 
-        thrusting = input.thrust && !cloaked
+        // sublight engines still run while cloaked, at reduced power
+        thrusting = input.thrust
+        let thrustMul: CGFloat = cloaked ? 0.55 : 1.0
         if thrusting {
-            velocity += CGVector(angle: zRotation) * spec.thrust * dt
+            velocity += CGVector(angle: zRotation) * (spec.thrust * thrustMul) * dt
         }
-        plume.alpha = thrusting ? CGFloat.random(in: 0.5...1.0) : 0
+        plume.alpha = thrusting ? (cloaked ? 0.3 : CGFloat.random(in: 0.5...1.0)) : 0
 
         velocity *= vpow(spec.damp, dt * 60)
-        let maxV = spec.maxSpeed
+        let maxV = spec.maxSpeed * (cloaked ? 0.55 : 1.0)
         if velocity.lengthSquared > maxV * maxV { velocity = velocity.scaled(to: maxV) }
 
         gunCd = max(0, gunCd - dt)

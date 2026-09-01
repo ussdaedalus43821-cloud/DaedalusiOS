@@ -62,8 +62,8 @@ enum GC {
 
     // ---- invincibility cloak --------------------------------------
     static let cloakEnergyMax: CGFloat  = 100
-    static let cloakDrain: CGFloat      = 20
-    static let cloakRecharge: CGFloat   = 11
+    static let cloakDrain: CGFloat      = 7      // ~14 s of cloak
+    static let cloakRecharge: CGFloat   = 9
     static let cloakMinToEngage: CGFloat = 12
     static let cloakDecloakShieldDelay: CGFloat = 3.5
 

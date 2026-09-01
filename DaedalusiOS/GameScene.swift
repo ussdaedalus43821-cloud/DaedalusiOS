@@ -36,6 +36,9 @@ final class GameScene: SKScene {
     private var isGameOver = false
     private var didReportScore = false
     private var replicatorDestroyed = false
+    private var isPausedByPlayer = false
+    private var pauseNode: SKNode?
+    private var resignObserver: NSObjectProtocol?
 
     // sector / hyperdrive
     private var sectorIndex = 0
@@ -101,8 +104,19 @@ final class GameScene: SKScene {
         controls.onTap = { [weak self] pad in self?.handleTapPad(pad) }
         hyperUI.onPick = { [weak self] idx in self?.finishPicking(idx) }
 
+        // flush the record + auto-pause if the app is backgrounded mid-run
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            HighScoreStore.shared.submit(self.score)
+            if !self.isGameOver { self.setPaused(true) }
+        }
+
         startNewGame()
     }
+
+    deinit { if let o = resignObserver { NotificationCenter.default.removeObserver(o) } }
 
     override func didChangeSize(_ oldSize: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
@@ -117,6 +131,8 @@ final class GameScene: SKScene {
         friendlyShots.forEach { $0.removeFromParent() }; friendlyShots.removeAll()
         enemyShots.forEach { $0.removeFromParent() }; enemyShots.removeAll()
         cam.children.filter { $0.name == "over" }.forEach { $0.removeFromParent() }
+        pauseNode?.removeFromParent(); pauseNode = nil
+        isPausedByPlayer = false
 
         score = 0
         isGameOver = false
@@ -248,9 +264,9 @@ final class GameScene: SKScene {
         guard dt > 0 else { return }
         dt = min(dt, 1.0 / 20.0)
 
-        let frozen = isGameOver || picking || hyper != .idle
+        let frozen = isGameOver || picking || isPausedByPlayer || hyper != .idle
 
-        updateHyperdrive(dt)
+        if !isPausedByPlayer { updateHyperdrive(dt) }
 
         if !frozen {
             player.update(dt: dt, input: controls.state, scene: self)
@@ -388,6 +404,7 @@ final class GameScene: SKScene {
     // MARK: Cull
 
     private func cull() {
+        let killsThisFrame = enemies.contains { $0.isDead }
         for e in enemies where e.isDead {
             score += e.scoreValue
             let big = e.kind.isCapital
@@ -405,6 +422,8 @@ final class GameScene: SKScene {
             e.removeFromParent()
         }
         enemies.removeAll { $0.isDead }
+        // persist the record as it climbs, so a background/relaunch can't lose it
+        if killsThisFrame { HighScoreStore.shared.submit(score) }
 
         for a in allies where a.isDead {
             Effects.explosion(in: self, at: a.position, scale: 1.1)
@@ -508,8 +527,50 @@ final class GameScene: SKScene {
             picking = true
             player.setCloakOff()
             hyperUI.present(size: size, currentIndex: sectorIndex)
+        case .pause:
+            guard !picking else { return }
+            setPaused(true)
         default: break
         }
+    }
+
+    // MARK: Pause
+
+    private func setPaused(_ on: Bool) {
+        guard on != isPausedByPlayer else { return }
+        isPausedByPlayer = on
+        if on {
+            HighScoreStore.shared.submit(score)      // never lose a run to a pause
+            controls.isHidden = true
+            let node = SKNode(); node.zPosition = 2400; node.name = "pausemenu"
+            let dim = SKSpriteNode(color: SKColor(red: 0.02, green: 0.03, blue: 0.06, alpha: 0.78),
+                                   size: CGSize(width: size.width * 2, height: size.height * 2))
+            node.addChild(dim)
+            let title = label("PAUSED", 34, SKColor(red: 0.6, green: 0.85, blue: 1, alpha: 1))
+            title.position = CGPoint(x: 0, y: 70); node.addChild(title)
+            let sc = label("SCORE \(score)     BEST \(HighScoreStore.shared.highScore)", 15, .white)
+            sc.position = CGPoint(x: 0, y: 34); node.addChild(sc)
+            node.addChild(pauseButton("RESUME", y: -20, name: "resume"))
+            node.addChild(pauseButton("MAIN MENU", y: -84, name: "menu"))
+            cam.addChild(node)
+            pauseNode = node
+        } else {
+            pauseNode?.removeFromParent(); pauseNode = nil
+            controls.isHidden = false
+            lastTime = 0                              // don't fast-forward on resume
+        }
+    }
+
+    private func pauseButton(_ text: String, y: CGFloat, name: String) -> SKNode {
+        let box = SKShapeNode(rectOf: CGSize(width: 240, height: 46), cornerRadius: 10)
+        box.fillColor = SKColor(red: 0.1, green: 0.5, blue: 0.9, alpha: name == "resume" ? 0.9 : 0.18)
+        box.strokeColor = SKColor(red: 0.4, green: 0.7, blue: 1, alpha: 0.8)
+        box.lineWidth = 1
+        box.position = CGPoint(x: 0, y: y)
+        box.name = name
+        let l = label(text, 16, name == "resume" ? .black : .white)
+        box.addChild(l)
+        return box
     }
 
     private func finishPicking(_ idx: Int?) {
@@ -632,6 +693,16 @@ final class GameScene: SKScene {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isGameOver { onReturnToMenu?(); return }
+        if isPausedByPlayer {
+            for t in touches {
+                let p = t.location(in: cam)          // pause menu lives in camera space
+                if abs(p.x) <= 122 && abs(p.y - (-20)) <= 26 { setPaused(false); return }
+                if abs(p.x) <= 122 && abs(p.y - (-84)) <= 26 {
+                    HighScoreStore.shared.submit(score); onReturnToMenu?(); return
+                }
+            }
+            return
+        }
         for t in touches {
             let p = t.location(in: cam)
             if picking { hyperUI.handleTap(t.location(in: hyperUI)); continue }
@@ -639,7 +710,7 @@ final class GameScene: SKScene {
         }
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !picking else { return }
+        guard !picking, !isPausedByPlayer else { return }
         for t in touches { controls.touchMoved(ObjectIdentifier(t), at: t.location(in: cam)) }
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
